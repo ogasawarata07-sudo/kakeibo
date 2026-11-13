@@ -35,6 +35,7 @@ class AppState extends ChangeNotifier {
       categories.clear();
     }
     if (categories.isEmpty) categories.addAll(defaultCategories());
+    _ensureMinimum();
   }
 
   // 全データを1つの文字列(JSON)にする。保存とバックアップの両方で使う
@@ -62,6 +63,7 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addAll(newCategories.isEmpty ? defaultCategories() : newCategories);
       budget = (j['budget'] as int?) ?? 0;
+      _ensureMinimum();
       _sort();
       _changed();
       return true;
@@ -123,9 +125,48 @@ class AppState extends ChangeNotifier {
     return c;
   }
 
-  void removeCategory(String id) {
-    categories.removeWhere((c) => c.id == id && !c.builtin);
+  // 削除できたら true。収入・支出それぞれ最後の1つは消せない(入力画面が成り立たなくなるため)
+  bool removeCategory(String id) {
+    final target = categories.where((c) => c.id == id).toList();
+    if (target.isEmpty) return false;
+    final isIncome = target.first.isIncome;
+    if (categories.where((c) => c.isIncome == isIncome).length <= 1) {
+      return false;
+    }
+    categories.removeWhere((c) => c.id == id);
     _changed();
+    return true;
+  }
+
+  // 削除した標準カテゴリを元に戻す。戻した件数を返す
+  int restoreDefaults() {
+    var n = 0;
+    for (final d in defaultCategories()) {
+      if (!categories.any((c) => c.id == d.id)) {
+        categories.add(d);
+        n++;
+      }
+    }
+    if (n > 0) _changed();
+    return n;
+  }
+
+  // 収入・支出のカテゴリがそれぞれ最低1つあるようにする(読み込みデータが不完全なときの保険)
+  void _ensureMinimum() {
+    for (final d in defaultCategories()) {
+      if ((d.id == 'e_other' || d.id == 'i_other') &&
+          !categories.any((c) => c.isIncome == d.isIncome)) {
+        categories.add(d);
+      }
+    }
+  }
+
+  // 同じメモの直近の項目(メモ候補を選んだとき、カテゴリと金額を自動入力するのに使う)
+  Entry? lastEntryWithMemo(String memo, bool isIncome) {
+    for (final e in entries) {
+      if (e.memo == memo && e.isIncome == isIncome) return e;
+    }
+    return null;
   }
 
   List<Category> categoriesOf(bool isIncome) =>

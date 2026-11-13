@@ -99,6 +99,75 @@ class Entry {
       );
 }
 
+// 1234567 → 1,234,567(円マークなし)
+String commas(int n) => n.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (m) => ',',
+    );
+
+// 金額欄の入力を計算して整数にする。
+// 例: "500+300" → 800 / "1,000×3" → 3000 / "12,000" → 12000
+// 計算式として正しくないときは null を返す(掛け算・割り算が先、足し算・引き算があと)
+int? evalAmount(String input) {
+  final s = input
+      .replaceAll(',', '')
+      .replaceAll(' ', '')
+      .replaceAll('×', '*')
+      .replaceAll('÷', '/');
+  if (s.isEmpty) return null;
+
+  // 数字のかたまりと演算子に分ける
+  final tokens = RegExp(r'\d+|[+\-*/]').allMatches(s).map((m) => m[0]!).toList();
+  if (tokens.join() != s) return null; // 変な文字が混ざっている
+
+  var i = 0;
+
+  double? number() {
+    if (i >= tokens.length) return null;
+    final n = int.tryParse(tokens[i]);
+    if (n == null) return null;
+    i++;
+    return n.toDouble();
+  }
+
+  // 掛け算・割り算
+  double? term() {
+    final first = number();
+    if (first == null) return null;
+    var v = first;
+    while (i < tokens.length && (tokens[i] == '*' || tokens[i] == '/')) {
+      final op = tokens[i++];
+      final r = number();
+      if (r == null) return null;
+      if (op == '*') {
+        v = v * r;
+      } else {
+        if (r == 0) return null;
+        v = v / r;
+      }
+    }
+    return v;
+  }
+
+  // 足し算・引き算
+  double? expr() {
+    final first = term();
+    if (first == null) return null;
+    var v = first;
+    while (i < tokens.length && (tokens[i] == '+' || tokens[i] == '-')) {
+      final op = tokens[i++];
+      final r = term();
+      if (r == null) return null;
+      v = op == '+' ? v + r : v - r;
+    }
+    return v;
+  }
+
+  final result = expr();
+  if (result == null || i != tokens.length) return null;
+  return result.round();
+}
+
 // 最初から用意しておくカテゴリ
 List<Category> defaultCategories() => const [
       Category(id: 'e_food', name: '食費', isIncome: false, color: 0xFFEF5350, builtin: true),

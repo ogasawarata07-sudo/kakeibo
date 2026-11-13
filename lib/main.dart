@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app_state.dart';
 import 'category_page.dart';
@@ -24,6 +25,17 @@ class KakeiboApp extends StatelessWidget {
     return MaterialApp(
       title: '家計簿',
       theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
+      // 端末の設定が「ダーク」のときは、こちらのテーマが使われる
+      darkTheme: ThemeData(
+        colorSchemeSeed: Colors.teal,
+        brightness: Brightness.dark,
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.system,
+      // 日付選択などの標準部品を日本語にする
+      locale: const Locale('ja'),
+      supportedLocales: const [Locale('ja'), Locale('en')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       home: HomePage(state: state),
     );
   }
@@ -58,6 +70,15 @@ class _HomePageState extends State<HomePage> {
       final now = DateTime.now();
       final isThisMonth = now.year == _month.year && now.month == _month.month;
       _selected = isThisMonth ? DateTime(now.year, now.month, now.day) : _month;
+    });
+  }
+
+  // 今日の日付のある月に戻って、今日を選択する
+  void _goToday() {
+    final now = DateTime.now();
+    setState(() {
+      _month = DateTime(now.year, now.month);
+      _selected = DateTime(now.year, now.month, now.day);
     });
   }
 
@@ -232,7 +253,16 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _monthNav(),
                   _summary(),
-                  _calendar(),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    // 左へなぞる=翌月、右へなぞる=前月
+                    onHorizontalDragEnd: (d) {
+                      final v = d.primaryVelocity ?? 0;
+                      if (v < -200) _moveMonth(1);
+                      if (v > 200) _moveMonth(-1);
+                    },
+                    child: _calendar(),
+                  ),
                   _dayPanel(),
                   const SizedBox(height: 88), // ボタンに隠れないよう余白
                 ],
@@ -249,12 +279,18 @@ class _HomePageState extends State<HomePage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        const SizedBox(width: 48), // 右の「今日」ボタンと釣り合わせて、月表示を中央に保つ
         IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => _moveMonth(-1)),
         Text(
           '${_month.year}年${_month.month}月',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => _moveMonth(1)),
+        IconButton(
+          icon: const Icon(Icons.today_outlined),
+          tooltip: '今日',
+          onPressed: _goToday,
+        ),
       ],
     );
   }

@@ -72,7 +72,25 @@ class CategoryPage extends StatelessWidget {
       listenable: state,
       builder: (context, _) {
         return Scaffold(
-          appBar: AppBar(title: const Text('カテゴリ')),
+          appBar: AppBar(
+            title: const Text('カテゴリ'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.restore),
+                tooltip: '標準カテゴリを復元',
+                onPressed: () {
+                  final n = state.restoreDefaults();
+                  ScaffoldMessenger.of(context)
+                    ..clearSnackBars()
+                    ..showSnackBar(SnackBar(
+                      content: Text(
+                        n > 0 ? '標準カテゴリを$n件 復元しました' : '復元するカテゴリはありません',
+                      ),
+                    ));
+                },
+              ),
+            ],
+          ),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => showAddCategoryDialog(context, state),
             icon: const Icon(Icons.add),
@@ -85,9 +103,9 @@ class CategoryPage extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 88),
                 children: [
                   _header(context, '支出カテゴリ'),
-                  ...state.categoriesOf(false).map((c) => _tile(c)),
+                  ...state.categoriesOf(false).map((c) => _tile(context, c)),
                   _header(context, '収入カテゴリ'),
-                  ...state.categoriesOf(true).map((c) => _tile(c)),
+                  ...state.categoriesOf(true).map((c) => _tile(context, c)),
                 ],
               ),
             ),
@@ -102,15 +120,43 @@ class CategoryPage extends StatelessWidget {
         child: Text(text, style: Theme.of(context).textTheme.titleSmall),
       );
 
-  Widget _tile(Category c) => ListTile(
+  Widget _tile(BuildContext context, Category c) => ListTile(
         leading: CircleAvatar(radius: 10, backgroundColor: Color(c.color)),
         title: Text(c.name),
-        trailing: c.builtin
-            ? const Text('標準', style: TextStyle(color: Colors.grey))
-            : IconButton(
-                icon: const Icon(Icons.delete_outline),
-                tooltip: '削除',
-                onPressed: () => state.removeCategory(c.id),
-              ),
+        subtitle: c.builtin ? const Text('標準') : null,
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_outline),
+          tooltip: '削除',
+          onPressed: () => _confirmDelete(context, c),
+        ),
       );
+
+  Future<void> _confirmDelete(BuildContext context, Category c) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('「${c.name}」を削除しますか?'),
+        content: const Text('このカテゴリを使っていた項目は消えず、「未分類」と表示されます。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('削除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final done = state.removeCategory(c.id);
+    if (!done) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(
+          content: Text('収入・支出それぞれ、カテゴリは最低1つ必要です'),
+        ));
+    }
+  }
 }
